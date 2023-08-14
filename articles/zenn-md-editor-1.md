@@ -254,5 +254,273 @@ export default MarkdownEditor;
 ### ツールバーのカスタマイズ
 このアプリを作ろうと思ったキッカケの一つに、Markdown記法を挿入するツールバーが欲しいという気持ちがあったので、ツールバーのカスタマイズからいきます。
 
+SimpleMdeコンポーネントにはEasyMDEのオプションをpropsとして渡すことができ、ツールバーをカスタマイズすることができます。
 
+[https://github.com/Ionaru/easy-markdown-editor#toolbar-icons](https://github.com/Ionaru/easy-markdown-editor#toolbar-icons)にデフォルトで用意されているツールバー一覧が見れるので、ここから好きなものを追加します。
 
+ツールバーに独自のアイコンやメソッドを設定することもできますが、それは画像アップロードの際に。
+
+- 🗂MarkdownEditor.tsxを編集
+```diff tsx:src/components/editor/MarkdownEditor.tsx
++import { useMemo } from "react";
+ import SimpleMdeReact from "react-simplemde-editor";
++import SimpleMDE from "easymde";
+ import "easymde/dist/easymde.min.css";
++const toolbar: SimpleMDE.Options["toolbar"] = [
++  'bold',
++  'italic',
++  'quote',
++  'unordered-list',
++  'ordered-list',
++  'link',
++  'image',
++  'strikethrough',
++  'code',
++  'table',
++  'redo',
++  'heading',
++  'undo',
++  'clean-block',
++  'horizontal-rule',
++  'preview',
++  'side-by-side',
++  'fullscreen'
++];
+ 
+ const MarkdownEditor: React.FC = () => {
++  const mdeOptions: SimpleMDE.Options = useMemo(() => {
++    return {
++      width: 'auto',
++      spellChecker: false,
++      toolbar
++    };
++  }, []);
++
+   return (
+-    <SimpleMdeReact id="simple-mde"/>
++    <SimpleMdeReact
++      id="simple-mde"
++      options={mdeOptions}/>
+   );
+ };
+```
+### オートセーブ機能の追加
+
+SimpleMDEオプションにオートセーブ機能があるので、それを利用します。
+Zennファイルとの実装時には編集中のファイルに内容を書き込みますが、同期していない場合も使えるようにしたいので。
+
+このオートセーブ機能はローカルストレージにsmde_{指定したid}というKeyで保存してくれます。
+編集1秒後に保存されるように設定します。
+- 🗂MarkdownEditor.tsxを編集
+```diff tsx:src/components/editor/MarkdownEditor.tsx
+...
+
++const delay = 1000;// 1秒後に保存されるように設定
+ 
+ const MarkdownEditor: React.FC = () => {
++  const value = localStorage.getItem('smde_saved_content') || "";// リロード時にローカルストレージの値をバリューにセット
+   const mdeOptions: SimpleMDE.Options = useMemo(() => {
+     return {
+       width: 'auto',
+       spellChecker: false,
+-      toolbar
++      toolbar,
++      autosave: {
++        enabled: true,
++        uniqueId: "saved_content",
++        delay
++      },
+     };
+   }, []);
+ 
+   return (
+     <SimpleMdeReact
+       id="simple-mde"
+-      options={mdeOptions}/>
++      options={mdeOptions}
++      value={value}/>
+   );
+ };
+```
+
+これでリロードしても値が保存されるようになりました！
+
+### コードブロックのカスタマイズ
+まずはhighlight.js, marked, highlight.jsで自分の好みのcssをインポートします。
+https://highlightjs.org/examples
+
+- 🗂MarkdownEditor.tsxを編集
+```diff tsx:src/components/editor/MarkdownEditor.tsx
++ import { marked } from "marked";
++ import hljs from 'highlight.js';
++ import "highlight.js/styles/base16/bright.css"; //👉 https://highlightjs.org/examples
+```
+
+続いてコードブロックでtsx:index.tsxのように{言語}:{ファイル名}で入力できるようにしたいので、SimpleMDE.OptionsのpreviewRenderを使ってカスタマイズしていきます。
+
+previewRenderはプレーンテキストの Markdown を解析して HTMLを返すカスタム関数でユーザーがプレビューするときに使用されます。
+
+- 🗂MarkdownEditor.tsxを編集
+
+```diff tsx:src/components/editor/MarkdownEditor.tsx
+...
+
++  const previewRender = (value: string): string => {
++    const renderer = new marked.Renderer();
++    renderer.code = (code, codeInfo) => {
++      const codeInfoSplit = codeInfo.split(':');
++      const lang = codeInfoSplit[0]
++      const fileName = codeInfoSplit[1];
++      const langClass = hljs.getLanguage(lang) ? lang : 'plaintext';
++      const highlightedCode = hljs.highlight(langClass, code).value;
++      const codeBlockClass = fileName === undefined ? 'code-block-no-info' : 'code-block';
++
++      let codeBlock = `<code class="hljs ${codeBlockClass} language-${langClass}">${highlightedCode}</code>`
++      if (fileName !== undefined) {
++        codeBlock = `<div class="code-info"><span>${fileName}</span></div>` + codeBlock
++      }
++      return `<pre>${codeBlock}</pre>`
++    };
++
++    return marked(value, { renderer });
++  };
++
+   const mdeOptions: SimpleMDE.Options = useMemo(() => {
+     return {
+       width: 'auto',
+       spellChecker: false,
+       toolbar,
++      previewRender,
+       autosave: {
+         enabled: true,
+         uniqueId: "saved_content",
+         delay
+       },
+     };
+-  }, []);
++  }, [previewRender]);
+```
+
+コードブロックの見た目も整えたいのと、エディタが全画面に表示されて欲しいので、cssを編集します。
+- 🗂index.cssを編集
+```css:src/index.css
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
+    Arial, sans-serif;
+  margin: auto;
+  max-width: auto;
+}
+
+.code-block{
+  border-radius: 0px 0px 10px 10px
+}
+
+.code-block-no-info{
+  border-radius: 10px
+}
+
+code{
+  font-size: 1rem;
+}
+
+.code-info {
+  display: flex;
+  justify-content: space-between;
+  color: #e6e6ee;
+  background: #484747;
+  padding: 12px;
+  font-size: 12px;
+  border-radius: 10px 10px 0px 0px;
+}
+```
+
+まぁまぁいい感じ。
+![](/images/screen-shot4.png)
+
+### MarkdownEditor.tsxのコード全体
+```tsx:src/components/editor/MarkdownEditor.tsx
+import { useMemo } from "react";
+import SimpleMdeReact from "react-simplemde-editor";
+import SimpleMDE from "easymde";
+import { marked } from "marked";
+import hljs from 'highlight.js';
+import "easymde/dist/easymde.min.css";
+import "highlight.js/styles/base16/bright.css"; //👉 https://highlightjs.org/examples
+
+const toolbar: SimpleMDE.Options["toolbar"] = [
+  'bold',
+  'italic',
+  'quote',
+  'unordered-list',
+  'ordered-list',
+  'link',
+  'image',
+  'strikethrough',
+  'code',
+  'table',
+  'redo',
+  'heading',
+  'undo',
+  'clean-block',
+  'horizontal-rule',
+  'preview',
+  'side-by-side',
+  'fullscreen'
+];
+
+const delay = 1000; // 1秒後に保存されるように設定
+
+const MarkdownEditor: React.FC = () => {
+  const value = localStorage.getItem('smde_saved_content') || ""; // リロード時にローカルストレージの値をSimpleMdeReactコンポーネントのvalueとしてセット
+
+  const previewRender = (value: string): string => {
+    const renderer = new marked.Renderer();
+    renderer.code = (code, codeInfo) => {
+      const codeInfoSplit = codeInfo.split(':');
+      const lang = codeInfoSplit[0]
+      const fileName = codeInfoSplit[1];
+      const langClass = hljs.getLanguage(lang) ? lang : 'plaintext';
+      const highlightedCode = hljs.highlight(langClass, code).value;
+      const codeBlockClass = fileName === undefined ? 'code-block-no-info' : 'code-block';
+
+      let codeBlock = `<code class="hljs ${codeBlockClass} language-${langClass}">${highlightedCode}</code>`
+      if (fileName !== undefined) {
+        codeBlock = `<div class="code-info"><span>${fileName}</span></div>` + codeBlock
+      }
+      return `<pre>${codeBlock}</pre>`
+    };
+
+    return marked(value, { renderer });
+  };
+
+  const mdeOptions: SimpleMDE.Options = useMemo(() => {
+    return {
+      width: 'auto',
+      spellChecker: false,
+      toolbar,
+      previewRender,
+      autosave: {
+        enabled: true,
+        uniqueId: "saved_content",
+        delay
+      },
+    };
+  }, [previewRender]);
+
+  return (
+    <SimpleMdeReact
+      id="simple-mde"
+      options={mdeOptions}
+      value={value}/>
+  );
+};
+
+export default MarkdownEditor;
+```
+
+# おわり
+とりあえずマークダウンエディタが使えるところまで実装しました！
+ここから先はまた長くなりそうなので、次回以降続きを書いていきたいと思います。
+
+React TypeScriptは初心者なので、何かご指摘等あればご教示いただけると幸いです。
+最後までお読みいただき、ありがとうございました！

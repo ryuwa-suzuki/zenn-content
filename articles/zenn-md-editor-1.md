@@ -1,5 +1,5 @@
 ---
-title: "electron ✖️React ✖️TypeScriptでZenn用マークダウンエディタを作ってみる"
+title: "Electron ✖️React ✖️TypeScriptでZenn用マークダウンエディタを作ってみる"
 emoji: "✏️"
 type: "tech" # tech: 技術記事 / idea: アイデア
 topics: [react, typescript, electron, javascript, マークダウン]
@@ -10,10 +10,12 @@ published: false
 みなさんはじめまして。
 
 普段はバックエンドエンジニアとして、ひっそりとphp等を書くことでご飯を食べております。
-この度は流行りのZennに投稿するということで、大人気の**React**と**TypeScript**を学習する記事にすることにしました。
+この度は流行りのZennに投稿するということで、大人気の**React**と**TypeScript**を学習しながらアプリを作ってみる記事にすることにしました。
 
-学習するにしてもTodoアプリなどではモチベーションを保てずゼルダやピクミンに時間を奪われがちなので、**俺の俺による俺のための**エディタを作るんだっていう気持ちで挑むことにします。
+学習するにしてもTodoアプリなどではモチベーションを保てず、ゼルダやピクミンに時間を奪われがちなので、**俺の俺による俺のための**エディタを作るんだっていう気持ちで挑むことにします。
 
+Electronって何？って人もいるかもしれないので説明しておくと、Windows、macOS、Linuxのデスクトップアプリケーションを作成するためのフレームワークです。
+自分のアプリ作って使うってちょっと興奮しますよね。
 
 # はじめに
 
@@ -28,6 +30,14 @@ published: false
 
 です。
 この課題を全て解決するアプリにしようと思ってます。
+
+## 完成物
+以下に置いております。Macで開発したので、Mac用のアプリしか作成してません。
+Windowsは使ったことほとんどないので、Mac前提で書いてます。すいません🙇‍♂️
+https://github.com/ryuwa-suzuki/zenn-md-editor/releases
+
+ソースコードはこちら
+https://github.com/ryuwa-suzuki/zenn-md-editor
 
 ## 前提条件
 - [ZennとのGitHubリポジトリ連携](https://zenn.dev/zenn/articles/connect-to-github)が完了していること
@@ -669,7 +679,7 @@ export function initIpcMain () {
 ```
 
 - 🗂型を管理するzennTypes.tsの作成
-型を定義するファイルがあった方がいいなと思ったので作ったんですが、どうなんですかね？TypeScriptもほとんど触ったことないので、アドバイスいただけたら嬉しいですが。。
+型を定義するファイルがあった方がいいなと思ったので作ったんですが、どうなんですかね？TypeScriptもほとんど触ったことないので、アドバイスいただけたら嬉しいです。。
 ```ts:src/types/zennTypes.ts
 type Book = {
   bookName: string;
@@ -688,7 +698,7 @@ export type zennType = {
 src/background/index.tsで定義したいinitIpcMainをcreateWindow内で呼び出し、IPC通信を可能にします。
 ただ、これだとメインプロセス側を編集した際に、毎回立ち上げ直さないと変更が反映されません。
 皆さんどうしてるんでしょうか？
-とりあえず突き進みますが、、
+とりあえず突き進みます。
 ```diff ts:src/index.ts
 import { app, BrowserWindow, session } from 'electron';
 + import { initIpcMain } from './background/index';
@@ -809,9 +819,9 @@ components配下にnavigationフォルダを作成します。
 ```
 src
 └ components
-	└ navigation
-		├─ LinksGroup.tsx
-		└─ Navbar.tsx
+  └ navigation
+	  ├─ LinksGroup.tsx
+	  └─ Navbar.tsx
 ``` 
 
 - 🗂Navbar.tsxの作成
@@ -1086,4 +1096,578 @@ return (
    )
  }
 ```
+## Zennのディレクトリパスを登録するモーダルの作成
+参照するディレクトリのフルパスを登録するモーダルを作成します。
+アプリを開いた際にローカルストレージにzennのディレクトリのパスがなければモーダルを表示し、そのモーダルから登録できるようにします。
 
+```
+src
+└ components
+   └ modal
+       └─ InitModal.tsx
+```
+	
+- 🗂InitModal.tsxの作成
+```tsx:src/components/modal/InitModal.tsx
+import { Input, Button, Group, Space } from '@mantine/core';
+import { useZennContentContext } from '../../contexts/ZennContext';
+
+interface InitModalProps {
+  closeModal: () => void;
+}
+
+const InitModal: React.FC<InitModalProps> = ({closeModal}) => {
+  const { zennDirPath, syncWithZenn, setZennDirPath, setIsZennSynced } = useZennContentContext();
+  const sync = async () => {
+    localStorage.setItem('zenn_dir_path', zennDirPath);
+    setZennDirPath(zennDirPath);
+    syncWithZenn();
+    closeModal();
+  }
+  const  notSync = () => {
+    localStorage.setItem('zenn_dir_path', '');
+    setZennDirPath('');
+    setIsZennSynced(false);
+    closeModal();
+  }
+  return (
+    <>
+      <Input.Wrapper
+        id="input-demo"
+        label="Zennのルートパスを入力"
+      >
+        <Input
+          placeholder="/Users/zenn"
+          value={zennDirPath}
+          onChange={(event: React.ChangeEvent<HTMLInputElement>) => setZennDirPath(event.target.value)}
+        />
+      </Input.Wrapper>
+      <Space h="xl" />
+      <Group position="center" spacing="xl">
+        <Button onClick={sync}>
+          Zennと同期する
+        </Button>
+        <Button onClick={notSync} variant="outline">
+          同期しないで始める
+        </Button>
+      </Group>
+    </>
+  )
+}
+
+export default InitModal;
+```
+
+- 🗂zennTypes.tsの編集
+```diff ts:src/types/zennTypes.ts
+  type Book = {
+  bookName: string;
+  files: Array<string>;
+};
+export type zennType = {
+  zennDirPath: string;
+  fileNames: {
+    articles: Array<string>,
+    books: Array<Book>
+  };
+  selectedFile: {
+    label: string;
+    file: string;
+  };
++  isZennSynced: boolean;
+  setSelectedFile: (selected: { label: string, file: string }) => void;
+  setZennDirPath: (zennDirPath: string) => void;
++  syncWithZenn: () => Promise<void>;
++  setIsZennSynced: (value: boolean) => void;
+};
+```
+
+- 🗂ZennContext.tsxの編集
+```diff tsx:src/contexts/ZennContext.tsx
+ ...
+ 
+ export const ZennContentProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+   const [fileNames, setFileNames] = useState({ articles: [], books: [] });
+-
+-  const [zennDirPath, setZennDirPath] = useState<zennType['zennDirPath']>('{Zennディレクトリのフルパス}');
++  const [isZennSynced, setIsZennSynced] = useState<zennType['isZennSynced']>(localStorage.getItem('zenn_dir_path') ? true : false);
++  const [zennDirPath, setZennDirPath] = useState<zennType['zennDirPath']>(localStorage.getItem('zenn_dir_path') || '');
+   const [selectedFile, setSelectedFile] = useState<zennType['selectedFile']>({
+     label: localStorage.getItem('selected_label') || '',
+     file: localStorage.getItem('selected_file') || '',
+   });
+ 
+   const syncWithZenn = async () => {
++    if (!zennDirPath) {
++      setIsZennSynced(false);
++      return;
++    }
++
+     try {
+       const files = await window.api.syncWithZenn(zennDirPath);
++      setIsZennSynced(true);
+       setFileNames(files);
+     } catch (error) {
+       alert('エラーが発生しました')
++      setIsZennSynced(false);
+     }
+   };
+
+...
+
+       fileNames,
+       zennDirPath,
+       selectedFile,
++      isZennSynced,
+       setZennDirPath,
+-      setSelectedFile
++      setSelectedFile,
++      syncWithZenn,
++      setIsZennSynced
+       }}>
+       {children}
+     </ZennContentContext.Provider>
+```
+
+- 🗂Home.tsxの編集
+```diff tsx:src/components/Home.tsx
+ import MarkdownEditor from '../components/editor/MarkdownEditor';
+ import NavbarNested from '../components/navigation/Navbar';
++import { useZennContentContext } from '../contexts/ZennContext';
++import { Modal } from '@mantine/core';
++import { useDisclosure } from '@mantine/hooks';
++import InitModal from '../components/modal/InitModal';
++
++const Home = () => {
++  const { zennDirPath, isZennSynced } = useZennContentContext();
++  const ModalOpen = !zennDirPath;
++  const [opened, { close }] = useDisclosure(ModalOpen);
++  const editorWidth = isZennSynced ? {width: '75%'} : {width: '100%'}
+ 
+-const Home: React.FC = () => {
+   return (
+     <>
++      <Modal opened={opened} onClose={close}>
++        <InitModal closeModal={close} />
++      </Modal>
+       <div style={{display: 'flex'}}>
++        {isZennSynced &&
+         <div style={{width: '25%'}}>
+           <NavbarNested/>
+         </div>
+-        <div style={{width: '75%'}}>
++        }
++        <div style={editorWidth}>
+           <MarkdownEditor/>
+         </div>
+       </div>
+```
+zennと同期したかどうかもcontextで状態管理してます。
+
+## エディタとファイル内容の同期と画像のアップロード
+以上までで新規に作成するファイルは全て作成したので、一気に実装していきます。
+内容の説明は割愛しますが、編集したファイルだけ載せときます。
+すみません、、
+
+※src/index.tsでwebSecurity: falseとしてますが、画像プレビューの際にfile://がセキュリティエラーになってしまうため、追加してます。
+
+```diff ts:src/index.ts
+...
+declare global {
+  interface Window {
+    api: {
+      syncWithZenn: (zennDirPath: string) => Promise<zennType['fileNames']>;
++      getZennContent: (zennDirPath: string, label: string, file: string) => Promise<string>;
++      saveZennFile: (zennDirPath: string, label: string, file: string, content: string) => Promise<void>;
++      uploadImage: (zennDirPath: string, imagePath: string) => Promise<string>;
+    };
+  }
+}
+
+...
+
+const createWindow = (): void => {
+  // Create the browser window.
+  const mainWindow = new BrowserWindow({
+    height: 800,
+    width: 1200,
+    webPreferences: {
+      preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
++     webSecurity: false
+    },
+  });
+
+  // and load the index.html of the app.
+  mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
+
+  // Open the DevTools.
+  mainWindow.webContents.openDevTools();
+  initIpcMain();
+};
+```
+
+```diff ts:src/preload.ts
+...
+contextBridge.exposeInMainWorld(
+  'api', {
+    syncWithZenn: (zennDirPath: string) => ipcRenderer.invoke('sync-with-zenn', {zennDirPath}),
++   getZennContent: (zennDirPath: string, label: string, file: string) => ipcRenderer.invoke('get-zenn-content', {zennDirPath, label, file}),
++   saveZennFile: (zennDirPath: string, label: string, file: string, content: string) => ipcRenderer.invoke('save-zenn-file', {zennDirPath, label, file, content}),
++   uploadImage: (zennDirPath: string, imagePath: string) => ipcRenderer.invoke('upload-image', {zennDirPath, imagePath})
+  }
+)
+```
+
+```diff ts:src/background/index.ts
+ import { ipcMain } from 'electron'
+-import { syncWithZenn } from './zenn'
++import { getZennContent, saveZennFile, syncWithZenn, uploadImage } from './zenn'
+ export function initIpcMain () {
+   syncWithZenn(ipcMain)
++  getZennContent(ipcMain)
++  saveZennFile(ipcMain)
++  uploadImage(ipcMain)
+ }
+```
+
+```ts:src/background/zenn.ts
+// 追加
+export function getZennContent (ipcMain: Electron.IpcMain) {
+  ipcMain.handle('get-zenn-content', async (e, {zennDirPath, label, file}) => {
+    let fileDirPath = '';
+    if (label === 'articles') {
+      fileDirPath = path.join(zennDirPath, 'articles');
+    } else {
+      fileDirPath = path.join(zennDirPath, 'books', label);
+    }
+
+    if (fs.existsSync(path.join(fileDirPath, file))) {
+      return fs.readFileSync(path.join(fileDirPath, file), 'utf8').toString()
+    }
+
+    throw new Error('Failed to read file');
+  })
+}
+
+export function saveZennFile(ipcMain: Electron.IpcMain) {
+  ipcMain.handle('save-zenn-file', async (e, {zennDirPath, label, file, content }) => {
+    let fileDirPath = '';
+    if (label === 'articles') {
+      fileDirPath = path.join(zennDirPath, 'articles');
+    } else {
+      fileDirPath = path.join(zennDirPath, 'books', label);
+    }
+
+    try {
+      fs.writeFileSync(path.join(fileDirPath, file), content, 'utf8');
+      return;
+    } catch (error) {
+      throw new Error('Failed to save file');
+    }
+  });
+}
+
+export function uploadImage(ipcMain: Electron.IpcMain) {
+  ipcMain.handle('upload-image', async (e, {zennDirPath, imagePath }) => {
+    const distPath = path.join(zennDirPath, 'images');
+    const imageName = path.basename(imagePath);
+    const uploadImagePath = path.join(distPath, imageName)
+
+    try {
+      if (!fs.existsSync(distPath)) {
+        fs.mkdirSync(distPath);
+      }
+
+      fs.copyFileSync(imagePath, uploadImagePath)
+
+      return imageName;
+    } catch (error) {
+      throw new Error(error);
+    }
+  });
+}
+```
+
+```tsx:src/components/editor/MarkdownEditor.tsx
+import { useMemo } from "react";
+import SimpleMdeReact from "react-simplemde-editor";
+import SimpleMDE from "easymde";
+import { marked } from "marked";
+import hljs from 'highlight.js';
+import "easymde/dist/easymde.min.css";
+import "highlight.js/styles/base16/bright.css";
+import { Modal } from '@mantine/core';
+import { useDisclosure } from '@mantine/hooks';
+import { useZennContentContext } from '../../contexts/ZennContext';
+import InitModal from '../modal/InitModal';
+
+const MarkdownEditor = () => {
+  const [opened, { open, close }] = useDisclosure(false);
+  const modalOpen = () => {
+    open();
+  }
+  const toolbar: SimpleMDE.Options["toolbar"] = [
+    'bold',
+    'italic',
+    'quote',
+    'unordered-list',
+    'ordered-list',
+    'link',
+    'image',
+    'strikethrough',
+    'code',
+    'table',
+    'redo',
+    'heading',
+    'undo',
+    'clean-block',
+    'horizontal-rule',
+    'preview',
+    'side-by-side',
+    'fullscreen',
+    '|',
+    {
+      name: "settings",
+      action: modalOpen,
+      className: "fa fa-cog",
+      title: "settings"
+    },
+    {
+      name: "image",
+      action: () => {
+        const input = document.getElementById("imageFileInput");
+        if (input) {
+          input.click();
+          input.onchange = async () => {
+            const imgFile = (input as HTMLInputElement).files?.[0];
+            if (imgFile) {
+              imageUploadFunction(imgFile)
+            }
+          };
+        }
+      },
+      className: "fa fa-upload",
+      title: "Image Upload",
+    },
+  ];
+
+  const { zennData, isZennSynced, setZennData } = useZennContentContext();
+  const value = localStorage.getItem('smde_saved_value') || "";
+
+  marked.setOptions({breaks : true});
+
+  const previewRender = (value: string): string => {
+    const renderer = new marked.Renderer();
+    renderer.code = (code, codeInfo) => {
+      const codeInfoSplit = codeInfo.split(':');
+      const lang = codeInfoSplit[0]
+      const fileName = codeInfoSplit[1];
+      const langClass = hljs.getLanguage(lang) ? lang : 'plaintext';
+      const highlightedCode = hljs.highlight(langClass, code).value;
+      const codeBlockClass = fileName === undefined ? 'code-block-no-info' : 'code-block';
+
+      let codeBlock = `<code class="hljs ${codeBlockClass} language-${langClass}">${highlightedCode}</code>`
+      if (fileName !== undefined) {
+        codeBlock = `<div class="code-info"><span>${fileName}</span></div>` + codeBlock
+      }
+      return `<pre>${codeBlock}</pre>`
+    };
+
+    renderer.image = (href, title, text) => {
+      let newHref = href;
+      if (!newHref.startsWith('http://') && !newHref.startsWith('https://')) {
+        newHref = `file://${zennDirPath}${newHref}`;
+      }
+      return `<img style="margin: 1.5rem auto;display: table;max-width: 100%; height: auto;" src="${newHref}" alt="${text}" title="${title || text}">`;
+    };
+
+    return marked(value, { renderer });
+  };
+
+  const imageUploadFunction = async (image:File) => {
+    if (!isZennSynced) {
+      alert('アップロードできません');
+      return;
+    }
+
+    const imageName = await window.api.uploadImage(zennDirPath, image.path);
+
+    const newContent = localStorage.getItem('smde_saved_value') + '![](/images/'+ imageName +')';
+
+    setZennData({...zennData, content: newContent});
+    saveFile(newContent)
+  }
+
+  const mdeOptions: SimpleMDE.Options = useMemo(() => {
+    const delay = 1000;
+
+    return {
+      breaks: true,
+      width: 'auto',
+      spellChecker: false,
+      toolbar,
+      uploadImage: true,
+      previewRender,
+      imageUploadFunction,
+      autosave: {
+        enabled: true,
+        uniqueId: "saved_value",
+        delay,
+      },
+    };
+  }, [previewRender]);
+
+  let saveTimeout: NodeJS.Timeout | undefined;
+  const zennDirPath = localStorage.getItem('zenn_dir_path');
+  const saveFile = async (newContent: string) => {
+    if (saveTimeout) {
+      clearTimeout(saveTimeout);
+    }
+
+    if (newContent !== zennData.content) {
+      saveTimeout = setTimeout(async () => {
+        try {
+          await window.api.saveZennFile(zennDirPath, zennData.label, zennData.file, newContent);
+        } catch (error) {
+          alert('エラーが発生しました');
+        }
+      }, 2000);
+    }
+  }
+
+  return (
+    <>
+      <input type="file" id="imageFileInput" style={{ display: "none" }} />
+      <Modal opened={opened} onClose={close}>
+        <InitModal closeModal={close}/>
+      </Modal>
+      <SimpleMdeReact
+        id="simple-mde"
+        onChange={isZennSynced ? saveFile : null}
+        value={isZennSynced ? zennData.content : value}
+        options={mdeOptions} />
+    </>
+  );
+};
+
+export default MarkdownEditor;
+```
+
+```tsx:src/contexts/ZennContext.tsx
+import { createContext, useContext, useState, useEffect } from 'react';
+import { zennType } from '../types/zennTypes';
+
+const ZennContentContext = createContext<zennType | undefined>(undefined);
+
+export const useZennContentContext = () => {
+  return useContext(ZennContentContext);
+}
+
+export const ZennContentProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [fileNames, setFileNames] = useState({ articles: [], books: [] });
+  const [isZennSynced, setIsZennSynced] = useState<zennType['isZennSynced']>(localStorage.getItem('zenn_dir_path') ? true : false);
+  const [zennData, setZennData] = useState<zennType['zennData']>({
+    content: '',
+    label: '',
+    file: '',
+  });
+  const [selectedFile, setSelectedFile] = useState<zennType['selectedFile']>({
+    label: localStorage.getItem('selected_label') || '',
+    file: localStorage.getItem('selected_file') || '',
+  });
+
+  const [zennDirPath, setZennDirPath] = useState<zennType['zennDirPath']>(localStorage.getItem('zenn_dir_path') || '');
+
+  const syncWithZenn = async () => {
+    if (!zennDirPath) {
+      setIsZennSynced(false);
+      return;
+    }
+
+    try {
+      const files = await window.api.syncWithZenn(zennDirPath);
+      setIsZennSynced(true);
+      setFileNames(files);
+    } catch (error) {
+      alert('エラーが発生しました')
+      setIsZennSynced(false);
+    }
+  };
+
+  const getZennContent = async () => {
+    try {
+      const content = await window.api.getZennContent(zennDirPath, selectedFile.label, selectedFile.file);
+
+      setZennData({
+        content,
+        label: selectedFile.label,
+        file: selectedFile.file
+      });
+      localStorage.setItem('smde_saved_value', content);
+    } catch (error) {
+      alert('エラーが発生しました');
+    }
+  };
+
+  useEffect(() => {
+    syncWithZenn();
+    if(selectedFile.label === '' || selectedFile.file === '' || !isZennSynced) return;
+
+    getZennContent();
+  }, [selectedFile]);
+
+  return (
+    <ZennContentContext.Provider value={{
+      zennData,
+      fileNames,
+      isZennSynced,
+      zennDirPath,
+      selectedFile,
+      setZennData,
+      setZennDirPath,
+      setSelectedFile,
+      syncWithZenn,
+      getZennContent,
+      setIsZennSynced
+      }}>
+      {children}
+    </ZennContentContext.Provider>
+  );
+}
+```
+
+```ts:src/types/zennTypes.ts
+type Book = {
+  bookName: string;
+  files: Array<string>;
+};
+export type zennType = {
+  zennData: {
+    content: string;
+    label: string;
+    file: string;
+  };
+  isZennSynced: boolean;
+  fileNames: {
+    articles: Array<string>,
+    books: Array<Book>
+  };
+  zennDirPath: string;
+  selectedFile: {
+    label: string;
+    file: string;
+  };
+  setZennData: (zennData: {content: string, label: string, file: string}) => void;
+  setZennDirPath: (zennDirPath: string) => void;
+  setSelectedFile: (selected: { label: string, file: string }) => void;
+  syncWithZenn: () => Promise<void>;
+  getZennContent: () => Promise<void>;
+  setIsZennSynced: (value: boolean) => void;
+};
+```
+
+# おわり
+まだまだバグもあるし、追加したい機能もありますが、学習目的としては非常に良かったと思ってます。
+やっぱ何か作ってみると勉強になりますね。
+
+最後まで読んでいただき、大変ありがとうございました🙇‍♂️

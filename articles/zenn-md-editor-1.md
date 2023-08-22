@@ -3,7 +3,7 @@ title: "Electron ✖️React ✖️TypeScriptでZenn用マークダウンエデ�
 emoji: "✏️"
 type: "tech" # tech: 技術記事 / idea: アイデア
 topics: [react, typescript, electron, javascript, マークダウン]
-published: false
+published: true
 
 ---
 
